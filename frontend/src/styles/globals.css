@@ -1002,6 +1002,24 @@ button { font-family: var(--font); cursor: pointer; }
   .nav-brand { font-size: 10px; letter-spacing: 0.12em; }
   .nav-link { padding: var(--sp-sm) 12px; font-size: 10px; }
 
+  /* Mobile touch targets — WCAG 2.1 SC 2.5.5: min 48px */
+  .btn {
+    min-height: 48px;
+    font-size: 12px;
+    padding: 14px 20px;
+  }
+
+  .back-btn {
+    min-height: 48px;
+    padding: 12px 8px;
+  }
+
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+  }
+
   .slot-btn { min-width: 80px; min-height: 48px; padding: 12px 14px; font-size: 14px; }
 
   .form-actions { flex-direction: column-reverse; gap: 12px; }
