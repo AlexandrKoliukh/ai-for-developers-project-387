@@ -848,10 +848,16 @@ button { font-family: var(--font); cursor: pointer; }
   .nav-brand { font-size: 10px; letter-spacing: 0.12em; }
   .nav-link { padding: var(--sp-sm) 12px; font-size: 10px; }
 
-  .slot-btn { min-width: 64px; padding: 10px 10px; font-size: 13px; }
+  .slot-btn { min-width: 80px; min-height: 48px; padding: 12px 14px; font-size: 14px; }
 
-  .form-actions { flex-direction: column-reverse; gap: 10px; }
-  .form-actions .btn { width: 100%; justify-content: center; }
+  .form-actions { flex-direction: column-reverse; gap: 12px; }
+  .form-actions .btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 48px;
+    font-size: 14px;
+    padding: 14px 24px;
+  }
 
   .section-header { flex-wrap: wrap; }
 
