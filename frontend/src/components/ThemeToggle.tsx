@@ -23,8 +23,14 @@ function getStoredTheme(): Theme {
   return 'system';
 }
 
+function resolveTheme(theme: Theme): 'light' | 'dark' {
+  return theme === 'system' ? getSystemTheme() : theme;
+}
+
 export default function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
+
+  const isDark = resolveTheme(theme) === 'dark';
 
   useEffect(() => {
     applyTheme(theme);
@@ -41,30 +47,69 @@ export default function ThemeToggle() {
     return () => mq.removeEventListener('change', handler);
   }, [theme]);
 
-  const cycle = useCallback(() => {
+  const toggle = useCallback(() => {
     setTheme((prev) => {
-      const resolved = prev === 'system' ? getSystemTheme() : prev;
+      const resolved = resolveTheme(prev);
       return resolved === 'dark' ? 'light' : 'dark';
     });
   }, []);
 
-  const label = theme === 'system'
-    ? (getSystemTheme() === 'light' ? 'Светлая' : 'Тёмная')
-    : theme === 'light' ? 'Светлая' : 'Тёмная';
-
-  const icon = theme === 'system'
-    ? (getSystemTheme() === 'light' ? '☀' : '☾')
-    : theme === 'light' ? '☀' : '☾';
+  const label = isDark ? 'Тёмная' : 'Светлая';
 
   return (
     <button
-      className="theme-toggle"
-      onClick={cycle}
+      className={`theme-switch${isDark ? ' theme-switch--dark' : ''}`}
+      onClick={toggle}
       aria-label={`Тема: ${label}. Нажмите для переключения`}
       title={`Тема: ${label}`}
       type="button"
+      role="switch"
+      aria-checked={isDark}
     >
-      <span className="theme-toggle-icon">{icon}</span>
+      {/* Sun icon */}
+      <svg
+        className="theme-switch__icon theme-switch__icon--sun"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="12" cy="12" r="5" />
+        <line x1="12" y1="1" x2="12" y2="3" />
+        <line x1="12" y1="21" x2="12" y2="23" />
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+        <line x1="1" y1="12" x2="3" y2="12" />
+        <line x1="21" y1="12" x2="23" y2="12" />
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+      </svg>
+
+      {/* Track with sliding thumb */}
+      <span className="theme-switch__track">
+        <span className="theme-switch__thumb" />
+      </span>
+
+      {/* Moon icon */}
+      <svg
+        className="theme-switch__icon theme-switch__icon--moon"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        <circle cx="19" cy="5" r="1" fill="currentColor" stroke="none" />
+        <circle cx="17" cy="9" r="0.5" fill="currentColor" stroke="none" />
+      </svg>
     </button>
   );
 }
