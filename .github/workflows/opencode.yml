@@ -7,12 +7,45 @@ on:
     types: [created]
 
 jobs:
+  explain:
+    if: |
+      (contains(github.event.comment.body, ' /oc explain') ||
+       startsWith(github.event.comment.body, '/oc explain') ||
+       contains(github.event.comment.body, ' /opencode explain') ||
+       startsWith(github.event.comment.body, '/opencode explain'))
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Run opencode explain
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: opencode/claude-opus-4-7
+          prompt: |
+            The user requested an explanation. Your task is to explain clearly and concisely in a GitHub comment.
+            Do NOT create a pull request. Do NOT make any code changes. Do NOT commit anything.
+            Just post a comment with the explanation.
+
   opencode:
     if: |
-      contains(github.event.comment.body, ' /oc') ||
-      startsWith(github.event.comment.body, '/oc') ||
-      contains(github.event.comment.body, ' /opencode') ||
-      startsWith(github.event.comment.body, '/opencode')
+      (contains(github.event.comment.body, ' /oc') ||
+       startsWith(github.event.comment.body, '/oc') ||
+       contains(github.event.comment.body, ' /opencode') ||
+       startsWith(github.event.comment.body, '/opencode')) &&
+      !(contains(github.event.comment.body, ' /oc explain') ||
+        startsWith(github.event.comment.body, '/oc explain') ||
+        contains(github.event.comment.body, ' /opencode explain') ||
+        startsWith(github.event.comment.body, '/opencode explain'))
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -30,4 +63,4 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
-          model: opencode/big-pickle
+          model: opencode/claude-opus-4-7
