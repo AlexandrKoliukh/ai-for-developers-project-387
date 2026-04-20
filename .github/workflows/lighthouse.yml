@@ -7,8 +7,8 @@ on:
     inputs:
       url:
         description: 'URL для проверки (по умолчанию — Render)'
-        required: false
-        default: ''
+        required: true
+        default: 'https://ai-for-developers-project-387.onrender.com/'
 
 jobs:
   lighthouse:
@@ -21,11 +21,7 @@ jobs:
         id: url
         run: |
           INPUT="${{ github.event.inputs.url }}"
-          if [ -n "$INPUT" ]; then
-            echo "target=$INPUT" >> "$GITHUB_OUTPUT"
-          else
-            echo "target=https://call-booking.onrender.com" >> "$GITHUB_OUTPUT"
-          fi
+          echo "target=$INPUT" >> "$GITHUB_OUTPUT"
 
       - name: Run Lighthouse
         uses: treosh/lighthouse-ci-action@v11
