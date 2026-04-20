@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: call-booking
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: OWNER_TIMEZONE
+        value: Europe/Moscow
+      - key: WORK_START_HOUR
+        value: "9"
+      - key: WORK_END_HOUR
+        value: "18"
+      - key: SLOT_INTERVAL_MINUTES
+        value: "30"

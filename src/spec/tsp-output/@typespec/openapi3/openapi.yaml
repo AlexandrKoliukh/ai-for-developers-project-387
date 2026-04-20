@@ -1,0 +1,664 @@
+openapi: 3.0.0
+info:
+  title: Запись на звонок — Call Booking Service
+  description: |2-
+      Simplified call booking service inspired by Cal.com.
+      No authentication or registration required. One hardcoded calendar owner.
+      Guests can browse event types, view available slots, and create bookings.
+      The owner can manage event types and view all upcoming bookings.
+  version: 0.0.0
+tags:
+  - name: Owner
+  - name: Guest
+paths:
+  /booking-window:
+    get:
+      operationId: GuestApi_getBookingWindow
+      description: |2-
+          Return the boundaries of the current booking window: today and today + 13 days (14 days total, UTC).
+          The client uses these dates to render the calendar and prevent selection outside the window.
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingWindow'
+      tags:
+        - Guest
+  /bookings:
+    post:
+      operationId: GuestApi_createBooking
+      description: |2-
+          Create a booking for a specific event type and time slot.
+
+          Booking window constraint:
+          - `startTime` MUST fall within the 14-day booking window: [today 00:00 UTC, today + 13 days 23:59 UTC].
+          - Requests with `startTime` outside this window return 400 ValidationError.
+
+          Overlap constraint:
+          - The server MUST check for overlapping bookings atomically before inserting.
+          - If the chosen startTime overlaps another booking (race condition),
+            respond with 409 Conflict — do NOT create the booking.
+      parameters: []
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          description: The request body or query parameters are invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: The requested resource does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '409':
+          description: |2-
+              The requested time slot is no longer available because it overlaps
+              with an existing booking (including bookings of other event types).
+              The client should refresh available slots and let the guest choose again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Guest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingCreateRequest'
+  /bookings/{id}:
+    get:
+      operationId: GuestApi_getBooking
+      description: Retrieve a booking by UUID — used for the confirmation page shown to the guest after booking.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The booking UUID.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '404':
+          description: The requested resource does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Guest
+  /event-types:
+    get:
+      operationId: GuestApi_listEventTypes
+      description: Browse all publicly available event types offered by the calendar owner.
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventTypeList'
+      tags:
+        - Guest
+  /event-types/{id}:
+    get:
+      operationId: GuestApi_getEventType
+      description: Get details of a single event type before proceeding to slot selection.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The event type slug.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventType'
+        '404':
+          description: The requested resource does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Guest
+  /event-types/{id}/slots:
+    get:
+      operationId: GuestApi_getAvailableSlots
+      description: |2-
+          Return available time slots for a specific event type on a given calendar date.
+
+          Booking window constraint:
+          - `date` MUST be within the 14-day booking window: [today, today + 13 days] (UTC).
+          - Requests for dates outside this window return 400 ValidationError.
+
+          Server logic:
+          1. Divide the owner's working hours into windows of exactly
+             eventType.durationMinutes each.
+          2. Exclude any window whose [start, end) interval overlaps with ANY
+             existing booking on that day — regardless of event type.
+          3. Return only the non-overlapping (available=true) windows.
+
+          This satisfies the rule: no two bookings can overlap, even across
+          different event types.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The event type slug.
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: true
+          description: |2-
+              Calendar date in ISO 8601 format (YYYY-MM-DD), UTC.
+              Must be within [today, today + 13 days]. Returns 400 if outside the booking window.
+          schema:
+            type: string
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeSlotList'
+        '400':
+          description: The request body or query parameters are invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: The requested resource does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Guest
+  /owner/bookings:
+    get:
+      operationId: OwnerApi_listBookings
+      description: |2-
+          List all upcoming bookings across every event type, ordered by startTime ascending.
+          'Upcoming' means startTime >= now (UTC).
+      parameters:
+        - name: eventTypeId
+          in: query
+          required: false
+          description: Filter to a specific event type slug. Omit to see all types.
+          schema:
+            type: string
+          explode: false
+        - name: from
+          in: query
+          required: false
+          description: ISO 8601 date — only return bookings on or after this date.
+          schema:
+            type: string
+          explode: false
+        - name: to
+          in: query
+          required: false
+          description: ISO 8601 date — only return bookings on or before this date.
+          schema:
+            type: string
+          explode: false
+        - name: limit
+          in: query
+          required: false
+          description: Number of results per page (default 50, max 200).
+          schema:
+            type: integer
+            format: int32
+          explode: false
+        - name: offset
+          in: query
+          required: false
+          description: Zero-based page offset.
+          schema:
+            type: integer
+            format: int32
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingList'
+        '400':
+          description: The request body or query parameters are invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Owner
+  /owner/event-types:
+    get:
+      operationId: OwnerApi_listEventTypes
+      description: List all event types managed by the owner.
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventTypeList'
+      tags:
+        - Owner
+    post:
+      operationId: OwnerApi_createEventType
+      description: Create a new event type. The slug (id) must be globally unique.
+      parameters: []
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventType'
+        '400':
+          description: The request body or query parameters are invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '409':
+          description: |2-
+              The requested time slot is no longer available because it overlaps
+              with an existing booking (including bookings of other event types).
+              The client should refresh available slots and let the guest choose again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Owner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventTypeCreateRequest'
+  /owner/event-types/{id}:
+    get:
+      operationId: OwnerApi_getEventType
+      description: Fetch a single event type by its slug.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The event type slug.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventType'
+        '404':
+          description: The requested resource does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Owner
+    put:
+      operationId: OwnerApi_updateEventType
+      description: Replace the mutable fields of an existing event type. The slug cannot change.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventType'
+        '400':
+          description: The request body or query parameters are invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: The requested resource does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Owner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventTypeUpdateRequest'
+    delete:
+      operationId: OwnerApi_deleteEventType
+      description: |2-
+          Delete an event type.
+          Returns 409 Conflict if future bookings exist for this event type.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: 'There is no content to send for this request, but the headers may be useful. '
+        '404':
+          description: The requested resource does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '409':
+          description: |2-
+              The requested time slot is no longer available because it overlaps
+              with an existing booking (including bookings of other event types).
+              The client should refresh available slots and let the guest choose again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Owner
+components:
+  schemas:
+    Booking:
+      type: object
+      required:
+        - id
+        - eventTypeId
+        - startTime
+        - endTime
+        - guestName
+        - guestEmail
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique booking identifier (UUID).
+        eventTypeId:
+          type: string
+          description: The slug of the event type that was booked.
+        startTime:
+          type: string
+          format: date-time
+          description: Start time of the booked slot (UTC).
+        endTime:
+          type: string
+          format: date-time
+          description: End time of the booked slot — derived as startTime + eventType.durationMinutes.
+        guestName:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Guest's display name.
+        guestEmail:
+          type: string
+          maxLength: 254
+          format: email
+          description: Guest's email address for confirmation.
+        guestNote:
+          type: string
+          maxLength: 2000
+          description: Optional note or context the guest wants to share with the owner.
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the booking was created (UTC).
+      description: A confirmed booking for a specific event type and time slot.
+    BookingCreateRequest:
+      type: object
+      required:
+        - eventTypeId
+        - startTime
+        - guestName
+        - guestEmail
+      properties:
+        eventTypeId:
+          type: string
+          description: The event type slug to book.
+        startTime:
+          type: string
+          format: date-time
+          description: Desired start time (UTC). Must align with an available slot.
+        guestName:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Guest's name.
+        guestEmail:
+          type: string
+          maxLength: 254
+          format: email
+          description: Guest's email.
+        guestNote:
+          type: string
+          maxLength: 2000
+          description: Optional note from the guest.
+      description: Request body for creating a new booking.
+    BookingList:
+      type: object
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Booking'
+        total:
+          type: integer
+          format: int32
+      description: List of bookings with total count.
+    BookingWindow:
+      type: object
+      required:
+        - windowStart
+        - windowEnd
+      properties:
+        windowStart:
+          type: string
+          description: First bookable date (today, UTC, ISO 8601 YYYY-MM-DD).
+        windowEnd:
+          type: string
+          description: Last bookable date (today + 13 days, UTC, ISO 8601 YYYY-MM-DD).
+      description: |2-
+          The booking window available to guests.
+          Slots exist only within [windowStart, windowEnd] (14 calendar days from today).
+    ErrorBody:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code.
+        message:
+          type: string
+          description: Human-readable explanation of what went wrong.
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationDetail'
+          description: Optional per-field validation details.
+      description: Standard error envelope shared by all error responses.
+    EventType:
+      type: object
+      required:
+        - id
+        - title
+        - durationMinutes
+      properties:
+        id:
+          type: string
+          minLength: 2
+          maxLength: 80
+          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+          description: Unique URL-safe slug identifier, e.g. '30-min-intro'.
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Human-readable title displayed to guests.
+        description:
+          type: string
+          maxLength: 1000
+          description: Optional longer description of what will happen during the call.
+        durationMinutes:
+          type: integer
+          format: int32
+          description: Fixed call duration in minutes (e.g. 15, 30, 60).
+      description: An event type represents a kind of meeting the owner offers (e.g. '30-min intro call').
+    EventTypeCreateRequest:
+      type: object
+      required:
+        - title
+        - durationMinutes
+      properties:
+        id:
+          type: string
+          minLength: 2
+          maxLength: 80
+          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+          description: URL-safe slug. If omitted, the server generates one automatically.
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 1000
+        durationMinutes:
+          type: integer
+          format: int32
+      description: Payload for creating a new event type.
+    EventTypeList:
+      type: object
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventType'
+        total:
+          type: integer
+          format: int32
+      description: List of event types.
+    EventTypeUpdateRequest:
+      type: object
+      required:
+        - title
+        - durationMinutes
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 1000
+        durationMinutes:
+          type: integer
+          format: int32
+      description: Payload for updating an existing event type. The slug cannot be changed after creation.
+    TimeSlot:
+      type: object
+      required:
+        - startTime
+        - endTime
+        - available
+      properties:
+        startTime:
+          type: string
+          format: date-time
+          description: Slot start time (UTC).
+        endTime:
+          type: string
+          format: date-time
+          description: Slot end time (UTC) — equals startTime + eventType.durationMinutes.
+        available:
+          type: boolean
+          description: Whether this slot is currently bookable (not overlapping any existing booking).
+      description: |2-
+          A single time slot for a given date and event type.
+          Slots are pre-computed by the server based on working-hours rules
+          and existing bookings. No two bookings may overlap — this rule applies
+          across all event types.
+    TimeSlotList:
+      type: object
+      required:
+        - date
+        - eventTypeId
+        - slots
+      properties:
+        date:
+          type: string
+          description: The date for which slots were computed (ISO 8601, YYYY-MM-DD).
+        eventTypeId:
+          type: string
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimeSlot'
+          description: Only slots where available=true are shown to the guest.
+      description: |2-
+          Available time slots for a specific date and event type.
+          All dates are within the 14-day booking window starting from today (UTC).
+    ValidationDetail:
+      type: object
+      required:
+        - field
+        - issue
+      properties:
+        field:
+          type: string
+          description: Name of the field that failed validation.
+        issue:
+          type: string
+          description: Description of the constraint violated.
+      description: Per-field validation failure detail.

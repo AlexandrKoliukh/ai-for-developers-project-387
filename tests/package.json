@@ -1,0 +1,17 @@
+{
+  "name": "call-booking-tests",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test":        "playwright test",
+    "test:api":    "playwright test --project=api",
+    "test:e2e":    "playwright test --project=e2e",
+    "test:headed": "playwright test --project=e2e --headed",
+    "test:ui":     "playwright test --ui",
+    "test:report": "playwright show-report playwright-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "typescript": "^5.5.3"
+  }
+}

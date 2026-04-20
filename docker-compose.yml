@@ -1,0 +1,66 @@
+services:
+  claude-code:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: claude-code
+    profiles: ["claude"]
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/workspace
+      - ${HOME}/.claude:/root/.claude:cached
+      - ${HOME}/.claude.json:/root/.claude.json:cached
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+  # ---------------------------------------------------------------------------
+  # Prism mock server — legacy mode (make frontend-mock)
+  # ---------------------------------------------------------------------------
+  mock-api:
+    image: stoplight/prism:4
+    command: mock -h 0.0.0.0 /spec/openapi.yaml --dynamic
+    volumes:
+      - ./src/spec/tsp-output/@typespec/openapi3/openapi.yaml:/spec/openapi.yaml:ro
+    ports:
+      - "4010:4010"
+
+  # ---------------------------------------------------------------------------
+  # FastAPI backend — real implementation (make up / make backend)
+  # ---------------------------------------------------------------------------
+  backend:
+    build: ./backend
+    container_name: booking-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Hot-reload: source is volume-mounted so --reload picks up changes
+      - ./backend/app:/app/app
+    environment:
+      - WORK_START_HOUR=9
+      - WORK_START_MINUTE=0
+      - WORK_END_HOUR=18
+      - WORK_END_MINUTE=0    # set to 30 for 18:30, etc.
+      - SLOT_INTERVAL_MINUTES=30  # step between slot start times
+      # Owner's IANA timezone — slots are generated in this timezone.
+      # Change to e.g. Europe/Moscow, America/New_York, Asia/Tokyo, etc.
+      - OWNER_TIMEZONE=Europe/Moscow
+
+  # ---------------------------------------------------------------------------
+  # Frontend — Vite dev server
+  # Default: points at FastAPI backend container (make up).
+  # Switch to Prism: VITE_MOCK_API_URL=http://mock-api:4010 (make frontend-mock).
+  # ---------------------------------------------------------------------------
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    environment:
+      # Makefile overrides this for mock mode: VITE_MOCK_API_URL=http://mock-api:4010
+      - VITE_MOCK_API_URL=${VITE_MOCK_API_URL:-http://booking-backend:8000}
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
