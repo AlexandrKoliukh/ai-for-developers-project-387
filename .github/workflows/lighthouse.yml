@@ -1,0 +1,46 @@
+name: Lighthouse Report
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # каждую ночь в 03:00 UTC (06:00 MSK)
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL для проверки (по умолчанию — Render)'
+        required: false
+        default: ''
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set target URL
+        id: url
+        run: |
+          INPUT="${{ github.event.inputs.url }}"
+          if [ -n "$INPUT" ]; then
+            echo "target=$INPUT" >> "$GITHUB_OUTPUT"
+          else
+            echo "target=https://call-booking.onrender.com" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Lighthouse
+        uses: treosh/lighthouse-ci-action@v11
+        with:
+          urls: ${{ steps.url.outputs.target }}
+          uploadArtifacts: true
+          artifactName: lighthouse-report
+          temporaryPublicStorage: true
+        id: lighthouse
+
+      - name: Print summary
+        run: |
+          echo "## Lighthouse Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** ${{ steps.url.outputs.target }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Run:** $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Отчёт доступен во вкладке **Artifacts** → \`lighthouse-report\`" >> $GITHUB_STEP_SUMMARY
