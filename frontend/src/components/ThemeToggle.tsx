@@ -4,6 +4,26 @@ type Theme = 'light' | 'dark' | 'system';
 
 const STORAGE_KEY = 'theme';
 
+/* ─── localStorage encapsulation ─── */
+const themeStorage = {
+  get(): Theme {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
+    } catch {
+      /* localStorage may be unavailable (SSR, private mode, quota) */
+    }
+    return 'system';
+  },
+  set(theme: Theme): void {
+    try {
+      localStorage.setItem(STORAGE_KEY, theme);
+    } catch {
+      /* silently ignore write errors */
+    }
+  },
+};
+
 function getSystemTheme(): 'light' | 'dark' {
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 }
@@ -17,24 +37,18 @@ function applyTheme(theme: Theme) {
   }
 }
 
-function getStoredTheme(): Theme {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
-  return 'system';
-}
-
 function resolveTheme(theme: Theme): 'light' | 'dark' {
   return theme === 'system' ? getSystemTheme() : theme;
 }
 
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(getStoredTheme);
+  const [theme, setTheme] = useState<Theme>(themeStorage.get);
 
   const isDark = resolveTheme(theme) === 'dark';
 
   useEffect(() => {
     applyTheme(theme);
-    localStorage.setItem(STORAGE_KEY, theme);
+    themeStorage.set(theme);
   }, [theme]);
 
   /* Listen for OS preference changes when in "system" mode */
