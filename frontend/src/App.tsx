@@ -1,6 +1,7 @@
 import { Routes, Route, NavLink } from 'react-router-dom';
 import GuestPage from './pages/GuestPage';
 import OwnerPage from './pages/OwnerPage';
+import ThemeToggle from './components/ThemeToggle';
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
           >
             Владелец
           </NavLink>
+          <ThemeToggle />
         </div>
       </nav>
 
