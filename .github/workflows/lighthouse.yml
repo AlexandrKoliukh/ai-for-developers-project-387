@@ -17,11 +17,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+
       - name: Set target URL
         id: url
         run: |
-          INPUT="${{ github.event.inputs.url }}"
-          echo "target=$INPUT" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.url }}" ]; then
+            TARGET="${{ github.event.inputs.url }}"
+          else
+            # для schedule и на случай пустого input
+            TARGET="https://ai-for-developers-project-387.onrender.com/"
+          fi
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+        shell: bash
 
       - name: Run Lighthouse
         uses: treosh/lighthouse-ci-action@v11
